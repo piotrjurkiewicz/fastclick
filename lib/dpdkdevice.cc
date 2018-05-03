@@ -946,7 +946,7 @@ FlowControlModeArg::unparse(FlowControlMode mode) {
 
 
 DPDKRing::DPDKRing() :
-    _message_pool(0), _MEM_POOL(""),
+    _message_pool(0), _MEM_POOL(""),  _ring_name(""),
     _burst_size(0),_numa_zone(0), _flags(0), _ring(0), _count(0),
     _force_create(false), _force_lookup(false)  {
 }
@@ -966,8 +966,7 @@ DPDKRing::parse(Args* args) {
     ErrorHandler* errh = args->errh();
 
     if (args ->  read_p("MEM_POOL",  _MEM_POOL)
-            .read_p("FROM_PROC", origin)
-            .read_p("TO_PROC",   destination)
+            .read_p("RING_NAME", _ring_name)
             .read("BURST",        _burst_size)
             .read("NDESC",        _ndesc)
             .read("NUMA_ZONE",    _numa_zone)
@@ -987,8 +986,8 @@ DPDKRing::parse(Args* args) {
         _MEM_POOL = "0";
     }
 
-    if (origin.empty() || destination.empty() ) {
-        errh->error("Enter FROM_PROC and TO_PROC names");
+    if (_ring_name.empty()) {
+        errh->error("Enter RING_NAME");
         return -1;
     }
 
@@ -1009,9 +1008,6 @@ DPDKRing::parse(Args* args) {
         click_chatter("[%s] Assuming NUMA zone 0\n", e->name().c_str());
         _numa_zone = 0;
     }
-
-    _PROC_1 = origin+"_2_"+destination;
-    _PROC_2 = destination+"_2_"+origin;
 
     return 0;
 }
