@@ -71,18 +71,14 @@ FromDPDKRing::initialize(ErrorHandler *errh)
     if (DPDKDevice::initialize(errh) != 0)
         return -1;
 
-    // If primary process, create the ring buffer and memory pool.
-    // The primary process is responsible for managing the memory
-    // and acting as a bridge to interconnect various secondary processes
-    if (_force_create || (!_force_lookup && rte_eal_process_type() == RTE_PROC_PRIMARY)){
+    if (!_force_create)
+        _ring = rte_ring_lookup(_ring_name.c_str());
+
+    if (_force_create || (!_ring && !_force_lookup)) {
         _ring = rte_ring_create(
-            _PROC_1.c_str(), DPDKDevice::RING_SIZE,
+            _ring_name.c_str(), DPDKDevice::RING_SIZE,
             rte_socket_id(), _flags
         );
-    }
-    // If secondary process, search for the appropriate memory and attach to it.
-    else {
-        _ring    = rte_ring_lookup   (_PROC_2.c_str());
     }
 
     _message_pool = rte_mempool_lookup(_MEM_POOL.c_str());

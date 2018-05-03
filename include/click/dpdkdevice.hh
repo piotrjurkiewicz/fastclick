@@ -280,8 +280,7 @@ class DPDKRing { public:
 
     struct rte_mempool *_message_pool;
     String _MEM_POOL;
-    String _PROC_1;
-    String _PROC_2;
+    String _ring_name;
 
     unsigned     _ndesc;
     unsigned     _burst_size;
