@@ -47,6 +47,27 @@ PaintTee::simple_action(Packet *p)
     return(p);
 }
 
+#if HAVE_BATCH
+PacketBatch *
+PaintTee::simple_action_batch(PacketBatch *batch)
+{
+    PacketBatch* tee_batch = 0;
+
+    FOR_EACH_PACKET(batch, p) {
+        if (p->anno_u8(_anno) == _color) {
+            if (tee_batch == 0)
+                tee_batch = PacketBatch::make_from_packet(p->clone());
+            else
+                tee_batch->append_packet(p->clone());
+        }
+    }
+
+    if (tee_batch != 0)
+        checked_output_push_batch(1, tee_batch);
+    return batch;
+}
+#endif
+
 void
 PaintTee::add_handlers()
 {
