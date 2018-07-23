@@ -20,6 +20,12 @@ CLICK_DECLS
  *
  * =over 8
  *
+ * =item HEX
+ *
+ * When optional keyword HEX is set to true, DATA and
+ * MASK are interpreted as hex values. Otherwise, they
+ * are interpreted as plain bytes. Default is false.
+ *
  * =item GROW
  *
  * When set to true and DATA exceeds past packet length,
@@ -46,6 +52,7 @@ class StoreData : public BatchElement { public:
     unsigned _offset;
     String _data;
     String _mask;
+    bool _is_hex;
     bool _grow;
 
 };

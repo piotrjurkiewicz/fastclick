@@ -20,9 +20,10 @@
 #include "storedata.hh"
 #include <click/args.hh>
 #include <click/error.hh>
+#include <click/straccum.hh>
 CLICK_DECLS
 
-StoreData::StoreData() : _grow(false)
+StoreData::StoreData() : _is_hex(false), _grow(false)
 {
 }
 
@@ -33,9 +34,16 @@ StoreData::configure(Vector<String> &conf, ErrorHandler *errh)
         .read_mp("OFFSET", _offset)
         .read_mp("DATA", _data)
         .read_p("MASK", _mask)
+        .read("HEX", _is_hex)
         .read("GROW", _grow)
         .complete() < 0)
         return -1;
+
+    if (_is_hex && _data.length() % 2)
+        return errh->error("hex DATA length is not multiple of 2");
+
+    if (_is_hex && _mask && _mask.length() % 2)
+        return errh->error("hex MASK length is not multiple of 2");
 
     if (_mask && _mask.length() > _data.length())
         return errh->error("MASK must be no longer than DATA");
@@ -43,9 +51,43 @@ StoreData::configure(Vector<String> &conf, ErrorHandler *errh)
     return 0;
 }
 
+static void
+update_value(char c, int shift, char &value)
+{
+    char v = 0;
+    if (c == '?')
+        v = 0;
+    else if (c >= '0' && c <= '9')
+        v = c - '0';
+    else if (c >= 'A' && c <= 'F')
+        v = c - 'A' + 10;
+    else if (c >= 'a' && c <= 'f')
+        v = c - 'a' + 10;
+    value |= (v << shift);
+}
+
+static String
+bytes_from_hex(const String &hex_string)
+{
+    StringAccum bytes_data;
+    for (int i = 0; i < hex_string.length();) {
+        char v = 0;
+        update_value(hex_string[i], 0, v);
+        update_value(hex_string[i + 1], 4, v);
+        bytes_data.append(v);
+        i += 2;
+    }
+    return String(bytes_data);
+}
+
 int
 StoreData::initialize(ErrorHandler *)
 {
+    if (_is_hex) {
+        _data = bytes_from_hex(_data);
+        if (_mask)
+            _mask = bytes_from_hex(_mask);
+    }
     if (_mask) {
         auto md = _data.mutable_data();
         for (int i = 0; i < _mask.length(); i++)
