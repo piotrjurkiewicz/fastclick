@@ -30,7 +30,8 @@
 
 CLICK_DECLS
 
-FromNetmapDevice::FromNetmapDevice() : _device(NULL), _keephand(false)
+FromNetmapDevice::FromNetmapDevice() : _device(NULL), _keephand(false), _timer(this),
+                                       _rate(0), _bandwidth(0), _tokens(0)
 {
 #if HAVE_BATCH
     in_batch_mode = BATCH_MODE_YES;
@@ -67,6 +68,9 @@ FromNetmapDevice::configure(Vector<String> &conf, ErrorHandler *errh)
 
     if (Args(conf, this, errh)
             .read("KEEPHAND",_keephand)
+            .read("RATE", _rate)
+            .read("BANDWIDTH", BandwidthArg(), _bandwidth)
+            .read("TOKENS", _tokens)
             .complete() < 0)
         return -1;
 
@@ -101,11 +105,25 @@ FromNetmapDevice::configure(Vector<String> &conf, ErrorHandler *errh)
         r = configure_rx(thisnode,n_queues,n_queues,errh);
     }
 
+    if (_rate && _bandwidth)
+        errh->error("FromNetmapDevice RATE and BANDWIDTH must not be specified simultaneously");
+
+    if (_rate) {
+        if (!_tokens)
+            _tokens = 1024;
+    } else if (_bandwidth) {
+        _rate = _bandwidth;
+        if (!_tokens)
+            _tokens = _bandwidth / 50;
+    }
+
+    if ( (int) _tokens < _burst * (_bandwidth ? 1500 : 1))
+        _tokens = _burst * (_bandwidth ? 1500 : 1);
+
     if (r != 0) return r;
 
     return 0;
 }
-
 
 int
 FromNetmapDevice::initialize(ErrorHandler *errh)
@@ -172,6 +190,19 @@ FromNetmapDevice::initialize(ErrorHandler *errh)
         _queue_for_fd[fd] = i;
     }
 
+    register_selects();
+
+    if (_rate) {
+        _tb.assign(_rate, _tokens);
+        _timer.initialize(this);
+    }
+
+    return 0;
+}
+
+void
+FromNetmapDevice::register_selects()
+{
     // Register selects for threads
     for (int i = 0; i < usable_threads.size();i++) {
         if (!usable_threads[i])
@@ -179,8 +210,18 @@ FromNetmapDevice::initialize(ErrorHandler *errh)
         for (int j = queue_for_thread_begin(i); j <= queue_for_thread_end(i); j++)
             master()->thread(i)->select_set().add_select(_device->nmds[j]->fd,this,SELECT_READ);
     }
+}
 
-    return 0;
+void
+FromNetmapDevice::unregister_selects()
+{
+    // Unregister selects for threads
+    for (int i = 0; i < usable_threads.size();i++) {
+        if (!usable_threads[i])
+            continue;
+        for (int j = queue_for_thread_begin(i); j <= queue_for_thread_end(i); j++)
+            master()->thread(i)->select_set().remove_select(_device->nmds[j]->fd,this,SELECT_READ);
+    }
 }
 
 inline bool
@@ -191,6 +232,12 @@ FromNetmapDevice::receive_packets(Task* task, int begin, int end, bool fromtask)
     int sent = 0;
 
     for (int i = begin; i <= end; i++) {
+
+        if (_rate) {
+            _tb.refill();
+            if (!_tb.contains(_burst * (_bandwidth ? 1500 : 1)))
+                break;
+        }
 
         lock();
 
@@ -229,11 +276,11 @@ FromNetmapDevice::receive_packets(Task* task, int begin, int end, bool fromtask)
     #endif
 
         while (n > 0) {
-
             struct netmap_slot* slot = &rxring->slot[cur];
 
             unsigned char* data = (unsigned char*) NETMAP_BUF(rxring, slot->buf_idx);
             WritablePacket *p;
+
     #if HAVE_NETMAP_PACKET_POOL
             if (slot->flags & NS_MOREFRAG) {
                 click_chatter("Packets bigger than Netmap buffer size are not supported while compiled with Netmap Packet Pool. Please disable this feature.");
@@ -265,6 +312,14 @@ FromNetmapDevice::receive_packets(Task* task, int begin, int end, bool fromtask)
             p->set_packet_type_anno(Packet::HOST);
             p->set_mac_header(p->data());
             p->set_timestamp_anno(ts);
+
+            if (_rate) {
+                if (_bandwidth)
+                    _tb.remove(p->length());
+                else
+                    _tb.remove(1);
+            }
+
     #if HAVE_BATCH
             if (batch_head == NULL) {
                 batch_head = PacketBatch::start_head(p);
@@ -290,6 +345,16 @@ FromNetmapDevice::receive_packets(Task* task, int begin, int end, bool fromtask)
 #if HAVE_BATCH
         output_push_batch(0,batch_head);
 #endif
+    }
+
+    if (_rate) {
+        _tb.refill();
+        if (!_tb.contains(_burst * (_bandwidth ? 1500 : 1))) {
+            unregister_selects();
+            _timer.schedule_after(Timestamp::make_jiffies(_tb.time_until_contains(_burst * (_bandwidth ? 1500 : 1))));
+            add_count(sent);
+            return sent;
+        }
     }
 
     if ((int) nr_pending > _burst) { //TODO size/4 or something
@@ -321,6 +386,12 @@ FromNetmapDevice::cleanup(CleanupStage)
 {
     cleanup_tasks();
     if (_device) _device->destroy();
+}
+
+void
+FromNetmapDevice::run_timer(Timer*)
+{
+    register_selects();
 }
 
 bool

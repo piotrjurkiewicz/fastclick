@@ -2,7 +2,9 @@
 #ifndef CLICK_FROMNETMAPDEVICE_HH
 #define CLICK_FROMNETMAPDEVICE_HH
 #include <click/config.h>
+#include <click/tokenbucket.hh>
 #include <click/task.hh>
+#include <click/timer.hh>
 #include <click/etheraddress.hh>
 #include <click/netmapdevice.hh>
 #include "queuedevice.hh"
@@ -93,6 +95,7 @@ public:
     inline bool receive_packets(Task* task, int begin, int end, bool fromtask);
 
     bool run_task(Task *);
+    void run_timer(Timer *);
 
   protected:
 
@@ -100,6 +103,9 @@ public:
 
     //Do not quit the task until we have sended all possible packets (until all queues are empty)
     bool _keephand;
+
+    TokenBucket _tb;
+    Timer _timer;
 
     std::vector<int> _queue_for_fd;
 
@@ -114,6 +120,14 @@ public:
     int write_handler(const String &, Element *e, void *,
                                       ErrorHandler *);
 
+  private:
+
+    unsigned _rate;
+    unsigned _bandwidth;
+    unsigned long _tokens;
+
+    void register_selects();
+    void unregister_selects();
 };
 
 CLICK_ENDDECLS
