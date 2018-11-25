@@ -7,29 +7,56 @@ click --simtime CONFIG
 %file CONFIG
 InfiniteSource()
 	-> Queue(10)
-	-> u1 :: RatedUnqueue(RATE 2)
+	-> u1 :: RatedUnqueue(RATE 2, PRECISE true)
 	-> c1 :: Counter
 	-> Discard;
 
 InfiniteSource()
 	-> Queue(10)
-	-> u2 :: RatedUnqueue(RATE 2, BURST_SIZE 50)
+	-> u2 :: RatedUnqueue(RATE 2, BURST_SIZE 50, PRECISE true)
 	-> c2 :: Counter
 	-> Discard;
 
 InfiniteSource()
 	-> Queue(10)
-	-> u3 :: RatedUnqueue(RATE 2, BURST_DURATION 25)
+	-> u3 :: RatedUnqueue(RATE 2, BURST_DURATION 25, PRECISE true)
 	-> c3 :: Counter
 	-> Discard;
 
 InfiniteSource()
 	-> Queue(10)
-	-> u4 :: RatedUnqueue(RATE 100, BURST_SIZE 1)
+	-> u4 :: RatedUnqueue(RATE 100, BURST_SIZE 1, PRECISE true)
 	-> c4 :: Counter
 	-> Discard;
 
-Script(wait 10, read c1.count, read c2.count, read c3.count, read c4.count, write stop);
+// Non-precise token bucket thresholds
+
+InfiniteSource()
+	-> Queue(10)
+	-> u5 :: RatedUnqueue(RATE 2, PRECISE false)
+	-> c5 :: Counter
+	-> Discard;
+
+InfiniteSource()
+	-> Queue(10)
+	-> u6 :: RatedUnqueue(RATE 2, BURST_SIZE 50, PRECISE false)
+	-> c6 :: Counter
+	-> Discard;
+
+InfiniteSource()
+	-> Queue(10)
+	-> u7 :: RatedUnqueue(RATE 2, BURST_DURATION 25, PRECISE false)
+	-> c7 :: Counter
+	-> Discard;
+
+InfiniteSource()
+	-> Queue(10)
+	-> u8 :: RatedUnqueue(RATE 100, BURST_SIZE 1, PRECISE false)
+	-> c8 :: Counter
+	-> Discard;
+
+Script(wait 10, read c1.count, read c2.count, read c3.count, read c4.count,
+       read c5.count, read c6.count, read c7.count, read c8.count, write stop);
 
 %expect stdout
 %expect -w stderr
@@ -40,4 +67,12 @@ c2.count:
 c3.count:
 69
 c4.count:
+{{909|910}} {{?this is because of inefficiencies with BURST_SIZE == 1 + simtime not being perfect}}
+c5.count:
+20
+c6.count:
+{{38|39}}
+c7.count:
+{{38|39}}
+c8.count:
 {{909|910}} {{?this is because of inefficiencies with BURST_SIZE == 1 + simtime not being perfect}}
