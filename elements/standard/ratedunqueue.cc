@@ -27,7 +27,7 @@
 CLICK_DECLS
 
 RatedUnqueue::RatedUnqueue()
-    : _task(this), _timer(&_task), _runs(0), _packets(0), _pushes(0), _failed_pulls(0), _empty_runs(0), _burst(32), _active(true)
+    : _task(this), _timer(&_task), _runs(0), _packets(0), _pushes(0), _failed_pulls(0), _empty_runs(0), _burst(32), _thresh(1), _active(true)
 {
 #if HAVE_BATCH
     in_batch_mode = BATCH_MODE_YES;
@@ -39,10 +39,17 @@ RatedUnqueue::configure(Vector<String> &conf, ErrorHandler *errh)
 {
     if (Args(this, errh).bind(conf)
 	    .read_or_set("BURST", _burst, 32)
+	    .read_or_set("THRESHOLD", _thresh, 1)
         .read_or_set("ACTIVE", _active, true)
         .consume() < 0)
         return -1;
-    return configure_helper(&_tb, is_bandwidth(), this, conf, errh);
+
+    int ret = configure_helper(&_tb, is_bandwidth(), this, conf, errh);
+
+    if (ret == 0 && _thresh > _tb.capacity())
+        _thresh = _tb.capacity();
+
+    return ret;
 }
 
 int
@@ -101,7 +108,8 @@ RatedUnqueue::run_task(Task *)
 	return false;
 
     _tb.refill();
-    if (_tb.contains(1)) {
+
+    if (_tb.contains(_thresh)) {
 #if HAVE_BATCH
             int burst = _tb.size();
             if (burst > (int)_burst)
@@ -133,7 +141,7 @@ RatedUnqueue::run_task(Task *)
             }
 #endif
     } else {
-	_timer.schedule_after(Timestamp::make_jiffies(_tb.time_until_contains(1)));
+	_timer.schedule_after(Timestamp::make_jiffies(_tb.time_until_contains(_thresh)));
 	_empty_runs++;
 	return false;
     }

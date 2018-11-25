@@ -38,6 +38,16 @@ CLICK_DECLS
  * Integer.  If specified, the capacity of the token bucket is set to this
  * value.
  *
+ * =item THRESHOLD
+ *
+ * Integer.  The element will wait until it is
+ * possible to pull at least threshold packets in order to reduce
+ * runs and empty runs numbers.
+ *
+ * Defaults is 1, the element will pull from queue as soon
+ * as it is possible to pull single packet.  This can result in
+ * single-packet batches and increased number of empty runs.
+ *
  * =h rate read/write
  *
  * =a BandwidthRatedUnqueue, Unqueue, Shaper, RatedSplitter */
@@ -79,6 +89,7 @@ class RatedUnqueue : public BatchElement { public:
     static String read_handler(Element *e, void *thunk) CLICK_COLD;
 
     bool _active;
+    int _thresh;
 };
 
 CLICK_ENDDECLS
