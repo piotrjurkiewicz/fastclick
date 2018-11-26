@@ -31,7 +31,7 @@
 CLICK_DECLS
 
 FromNetmapDevice::FromNetmapDevice() : _device(NULL), _keephand(false), _timer(this),
-                                       _rate(0), _bandwidth(0), _tokens(0)
+                                       _rate(0), _bandwidth(0), _tokens(0), _avg_packet_size(870)
 {
 #if HAVE_BATCH
     in_batch_mode = BATCH_MODE_YES;
@@ -117,8 +117,8 @@ FromNetmapDevice::configure(Vector<String> &conf, ErrorHandler *errh)
             _tokens = _bandwidth / 50;
     }
 
-    if ( (int) _tokens < _burst * (_bandwidth ? 1500 : 1))
-        _tokens = _burst * (_bandwidth ? 1500 : 1);
+    if (_tokens < _burst * (_bandwidth ? _avg_packet_size : 1))
+        _tokens = _burst * (_bandwidth ? _avg_packet_size : 1);
 
     if (r != 0) return r;
 
@@ -235,7 +235,7 @@ FromNetmapDevice::receive_packets(Task* task, int begin, int end, bool fromtask)
 
         if (_rate) {
             _tb.refill();
-            if (!_tb.contains(_burst * (_bandwidth ? 1500 : 1)))
+            if (!_tb.contains(_burst * (_bandwidth ? _avg_packet_size : 1)))
                 break;
         }
 
@@ -314,9 +314,10 @@ FromNetmapDevice::receive_packets(Task* task, int begin, int end, bool fromtask)
             p->set_timestamp_anno(ts);
 
             if (_rate) {
-                if (_bandwidth)
+                if (_bandwidth) {
                     _tb.remove(p->length());
-                else
+                    _avg_packet_size = ((_avg_packet_size * 15) + p->length()) / 16;
+                } else
                     _tb.remove(1);
             }
 
@@ -349,11 +350,24 @@ FromNetmapDevice::receive_packets(Task* task, int begin, int end, bool fromtask)
 
     if (_rate) {
         _tb.refill();
-        if (!_tb.contains(_burst * (_bandwidth ? 1500 : 1))) {
-            unregister_selects();
-            _timer.schedule_after(Timestamp::make_jiffies(_tb.time_until_contains(_burst * (_bandwidth ? 1500 : 1))));
-            add_count(sent);
-            return sent;
+        if (_bandwidth) {
+            if (!_tb.contains(_burst * _avg_packet_size)) {
+                if (_tokens < _burst * _avg_packet_size) {
+                    _tokens = _burst * _avg_packet_size;
+                    _tb.assign_adjust(_rate, _tokens);
+                }
+                unregister_selects();
+                _timer.schedule_after(Timestamp::make_jiffies(_tb.time_until_contains(_burst * _avg_packet_size)));
+                add_count(sent);
+                return sent;
+            }
+        } else {
+            if (!_tb.contains(_burst)) {
+                unregister_selects();
+                _timer.schedule_after(Timestamp::make_jiffies(_tb.time_until_contains(_burst)));
+                add_count(sent);
+                return sent;
+            }
         }
     }
 
