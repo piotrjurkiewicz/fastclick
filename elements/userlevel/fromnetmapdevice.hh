@@ -125,6 +125,7 @@ public:
     unsigned _rate;
     unsigned _bandwidth;
     unsigned long _tokens;
+    unsigned _avg_packet_size;
 
     void register_selects();
     void unregister_selects();
