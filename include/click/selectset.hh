@@ -45,8 +45,10 @@ class SelectSet { public:
 
     void run_selects(RouterThread *thread);
     inline void wake_immediate() {
-	_wake_pipe_pending = true;
-	ignore_result(write(_wake_pipe[1], "", 1));
+	if (_wake_pipe[1] >= 0) {
+	    _wake_pipe_pending = true;
+	    ignore_result(write(_wake_pipe[1], "", 1));
+	}
     }
 
     void kill_router(Router *router);
