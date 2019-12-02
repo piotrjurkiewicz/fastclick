@@ -219,6 +219,7 @@ class IPRouteTableMPath : public BatchElement { public:
   private:
 
     int _mode;
+    uint32_t _salt;
     enum { MODE_SINGLE, MODE_ADDR, MODE_PORT, MODE_PACKET };
     enum { CMD_ADD, CMD_SET, CMD_REMOVE };
     int run_command(int command, const String &, Vector<IPRouteMPath>* old_routes, ErrorHandler*);

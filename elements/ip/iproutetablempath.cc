@@ -138,6 +138,9 @@ IPRouteTableMPath::configure(Vector<String> &conf, ErrorHandler *errh)
         _mode = MODE_PACKET;
     else
         errh->warning("MODE %s unknown, should be single, addr, port or packet", mode.c_str());
+
+    _salt = click_random();
+
     for (int i = 1; i < conf.size(); i++) {
         if (!cp_ip_route_mpath(conf[i], &route, false, this)) {
             errh->error("argument %d should be %<ADDR/MASK [GATEWAY] OUTPUT [[GATEWAY] OUTPUT]...%>", i+1);
@@ -252,6 +255,7 @@ IPRouteTableMPath::calc_hash(Packet *p)
     else if (_mode == MODE_ADDR || _mode == MODE_PORT) {
         const click_ip *iph = p->ip_header();
         uint32_t a = (iph->ip_src.s_addr * 59) ^ iph->ip_dst.s_addr;
+        a ^= _salt;
         if (_mode == MODE_PORT && IP_FIRSTFRAG(iph) && (iph->ip_p == IP_PROTO_TCP || iph->ip_p == IP_PROTO_UDP)) {
             a ^= *((const uint16_t *) (p->transport_header()));
             a ^= *((const uint16_t *) (p->transport_header() + 2)) << 16;
