@@ -897,7 +897,18 @@ ErrorHandler::lfatal(const String &landmark, const char *fmt, ...)
 int
 ErrorHandler::xmessage(const String &str)
 {
+    StringAccum sa;
+    if (_emit_timestamp) {
+        sa << Timestamp::now().unparse() << ' ';
+    }
+    if (_name) {
+        sa << _name << ' ';
+    }
+
     String xstr = decorate(str);
+
+    if (sa)
+        xstr = combine_anno(xstr, sa.take_string());
 
     int min_level = 1000, xlevel = 1000;
     const char *s = xstr.begin(), *end = xstr.end();

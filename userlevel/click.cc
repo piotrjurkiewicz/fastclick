@@ -83,6 +83,8 @@ CLICK_USING_DECLS
 #define THREADS_AFF_OPT         319
 #define DPDK_OPT                320
 #define SIMTICK_OPT             321
+#define NAME_OPT                322
+#define LOG_TIMESTAMP_OPT       323
 
 static const Clp_Option options[] = {
     { "allow-reconfigure", 'R', ALLOW_RECONFIG_OPT, 0, Clp_Negate },
@@ -104,6 +106,8 @@ static const Clp_Option options[] = {
     { "affinity", 'a', THREADS_AFF_OPT, Clp_ValInt, Clp_Optional | Clp_Negate },
     { "time", 't', TIME_OPT, 0, 0 },
     { "unix-socket", 'u', UNIX_SOCKET_OPT, Clp_ValString, 0 },
+    { "name", 0, NAME_OPT, Clp_ValString, 0 },
+    { "log-timestamp", 0, LOG_TIMESTAMP_OPT, 0, 0 },
     { "version", 'v', VERSION_OPT, 0, 0 },
     { "warnings", 0, WARNINGS_OPT, 0, Clp_Negate },
     { "exit-handler", 'x', EXIT_HANDLER_OPT, Clp_ValString, 0 },
@@ -676,6 +680,14 @@ main(int argc, char **argv)
     }
      case CLICKPATH_OPT:
       set_clickpath(clp->vstr);
+      break;
+
+     case NAME_OPT:
+      errh->set_name(clp->vstr);
+      break;
+
+     case LOG_TIMESTAMP_OPT:
+      errh->set_emit_timestamp(true);
       break;
 
      case HELP_OPT:

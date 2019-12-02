@@ -125,7 +125,7 @@ class ErrorHandler { public:
 
     /** @brief Construct an ErrorHandler. */
     ErrorHandler()
-	: _nerrors(0) {
+	: _nerrors(0), _name(), _emit_timestamp(false) {
     }
 
     virtual ~ErrorHandler() {
@@ -287,6 +287,17 @@ class ErrorHandler { public:
 	return _nerrors;
     }
 
+    virtual void set_name(const String &str) {
+        _name = str;
+    }
+
+    virtual const String get_name() {
+        return _name;
+    }
+
+    virtual void set_emit_timestamp(bool val) {
+        _emit_timestamp = val;
+    }
 
     /** @brief Format an error string.
      * @param default_flags default ConversionFlags
@@ -580,6 +591,8 @@ class ErrorHandler { public:
   private:
 
     int _nerrors;
+    String _name;
+    bool _emit_timestamp;
 
     static ErrorHandler *the_default_handler;
     static ErrorHandler *the_silent_handler;
@@ -630,6 +643,18 @@ class ErrorVeneer : public ErrorHandler { public:
     String decorate(const String &str);
     void *emit(const String &str, void *user_data, bool more);
     void account(int level);
+
+    virtual void set_name(const String &str) {
+        _errh->set_name(str);
+    }
+
+    virtual const String get_name() {
+        return _errh->get_name();
+    }
+
+    virtual void set_emit_timestamp(bool val) {
+        _errh->set_emit_timestamp(val);
+    }
 
   private:
 
