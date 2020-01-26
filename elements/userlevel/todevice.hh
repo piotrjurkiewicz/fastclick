@@ -87,7 +87,7 @@ class ToDevice : public BatchElement { public:
 
     const char *class_name() const		{ return "ToDevice"; }
     const char *port_count() const		{ return "1/0-2"; }
-    const char *processing() const		{ return "l/h"; }
+    const char *processing() const		{ return "a/h"; }
     const char *flags() const			{ return "S2"; }
 
     int configure_phase() const { return KernelFilter::CONFIGURE_PHASE_TODEVICE; }
@@ -98,6 +98,11 @@ class ToDevice : public BatchElement { public:
 
     String ifname() const			{ return _ifname; }
     int fd() const				{ return _fd; }
+
+#if HAVE_BATCH
+    void push_batch(int, PacketBatch*);
+#endif
+    void push(int, Packet*);
 
     bool run_task(Task *);
     void selected(int fd, int mask);

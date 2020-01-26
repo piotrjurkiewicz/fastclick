@@ -224,8 +224,10 @@ ToDevice::initialize(ErrorHandler *errh)
         return errh->error("duplicate writer for device %<%s%>", _ifname.c_str());
     used = this;
 
-    ScheduleInfo::join_scheduler(this, &_task, errh);
-    _signal = Notifier::upstream_empty_signal(this, 0, &_task);
+    if (input_is_pull(0)) {
+        ScheduleInfo::join_scheduler(this, &_task, errh);
+        _signal = Notifier::upstream_empty_signal(this, 0, &_task);
+    }
     return 0;
 }
 
@@ -292,6 +294,40 @@ ToDevice::send_packet(Packet *p)
         return 0;
     else
         return errno ? -errno : -EINVAL;
+}
+
+#if HAVE_BATCH
+void
+ToDevice::push_batch(int, PacketBatch *batch)
+{
+    unsigned count = 0;
+    int r = 0;
+    Packet* last_ok = 0;
+    PacketBatch *batch_error = 0;
+    FOR_EACH_PACKET(batch, z) {
+        if ((r = send_packet(z)) >= 0) {
+            last_ok = z;
+            ++count;
+        } else
+            break;
+    }
+    if (count == batch->count())
+        checked_output_push_batch(0, batch);
+    else if (count > 0) {
+        batch->cut(last_ok, count, batch_error);
+        checked_output_push_batch(0, batch);
+        checked_output_push_batch(1, batch_error);
+    }
+}
+#endif
+
+void
+ToDevice::push(int, Packet *p)
+{
+    if (send_packet(p) >= 0)
+        checked_output_push(0, p);
+    else
+        checked_output_push(1, p);
 }
 
 bool
@@ -425,7 +461,8 @@ ToDevice::write_param(const String &in_s, Element *e, void *vparam,
 void
 ToDevice::add_handlers()
 {
-    add_task_handlers(&_task);
+    if (input_is_pull(0))
+        add_task_handlers(&_task);
     add_read_handler("debug", read_param, h_debug, Handler::CHECKBOX);
     add_read_handler("pulls", read_param, h_pulls);
     add_read_handler("signal", read_param, h_signal);
