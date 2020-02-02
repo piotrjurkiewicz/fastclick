@@ -233,13 +233,15 @@ FromNetmapDevice::receive_packets(Task* task, int begin, int end, bool fromtask)
 
     for (int i = begin; i <= end; i++) {
 
+        lock();
+
         if (_rate) {
             _tb.refill();
-            if (!_tb.contains(_burst * (_bandwidth ? _avg_packet_size : 1)))
+            if (!_tb.contains(_burst * (_bandwidth ? _avg_packet_size : 1))) {
+                unlock();
                 break;
+            }
         }
-
-        lock();
 
         struct nm_desc* nmd = _device->nmds[i];
 
@@ -265,8 +267,16 @@ FromNetmapDevice::receive_packets(Task* task, int begin, int end, bool fromtask)
 #if HAVE_NETMAP_PACKET_POOL && HAVE_BATCH
         PacketBatch *batch_head = NetmapDevice::make_netmap_batch(n, rxring, cur);
         if (!batch_head) goto error;
+        if (_rate) {
+            if (_bandwidth) {
+                int c = 0;
+                FOR_EACH_PACKET(batch_head, p) c += p->length();
+                _tb.remove(c);
+                _avg_packet_size = ((_avg_packet_size * 15 * batch_head->count()) + c) / (16 * batch_head->count());
+            } else
+                _tb.remove(batch_head->count());
+        }
 #else
-
         Timestamp ts = Timestamp::make_usec(rxring->ts.tv_sec, rxring->ts.tv_usec);
 
     #if HAVE_BATCH
