@@ -311,13 +311,7 @@ ToDevice::push_batch(int, PacketBatch *batch)
         } else
             break;
     }
-    if (count == batch->count())
-        checked_output_push_batch(0, batch);
-    else if (count > 0) {
-        batch->cut(last_ok, count, batch_error);
-        checked_output_push_batch(0, batch);
-        checked_output_push_batch(1, batch_error);
-    }
+    batch->kill();
 }
 #endif
 
