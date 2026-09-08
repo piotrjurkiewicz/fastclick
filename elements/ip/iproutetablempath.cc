@@ -294,7 +294,10 @@ IPRouteTableMPath::process(Packet *p)
 void
 IPRouteTableMPath::push(int, Packet *p)
 {
+    int read_token;
+    read_begin(read_token);
     int output_port = process(p);
+    read_end(read_token);
     if ( output_port < 0 ) {
         p->kill();
         return;
@@ -307,7 +310,19 @@ IPRouteTableMPath::push(int, Packet *p)
 void
 IPRouteTableMPath::push_batch(int, PacketBatch *batch)
 {
-    CLASSIFY_EACH_PACKET(noutputs() + 1, process, batch, checked_output_push_batch);
+    int read_token;
+    read_begin(read_token);
+    bool reading = true;
+    auto output_batch = [this, &reading, &read_token](int output, PacketBatch *output_batch) {
+        if (reading) {
+            read_end(read_token);
+            reading = false;
+        }
+        checked_output_push_batch(output, output_batch);
+    };
+    CLASSIFY_EACH_PACKET(noutputs() + 1, process, batch, output_batch);
+    if (reading)
+        read_end(read_token);
 }
 #endif
 
@@ -351,20 +366,27 @@ int
 IPRouteTableMPath::add_route_handler(const String &conf, Element *e, void *thunk, ErrorHandler *errh)
 {
     IPRouteTableMPath *table = static_cast<IPRouteTableMPath *>(e);
-    return table->run_command((thunk ? CMD_SET : CMD_ADD), conf, 0, errh);
+    table->write_begin();
+    int result = table->run_command((thunk ? CMD_SET : CMD_ADD), conf, 0, errh);
+    table->write_end();
+    return result;
 }
 
 int
 IPRouteTableMPath::remove_route_handler(const String &conf, Element *e, void *, ErrorHandler *errh)
 {
     IPRouteTableMPath *table = static_cast<IPRouteTableMPath *>(e);
-    return table->run_command(CMD_REMOVE, conf, 0, errh);
+    table->write_begin();
+    int result = table->run_command(CMD_REMOVE, conf, 0, errh);
+    table->write_end();
+    return result;
 }
 
 int
 IPRouteTableMPath::ctrl_handler(const String &conf_in, Element *e, void *, ErrorHandler *errh)
 {
     IPRouteTableMPath *table = static_cast<IPRouteTableMPath *>(e);
+    table->write_begin();
     String conf = cp_uncomment(conf_in);
     const char* s = conf.begin(), *end = conf.end();
 
@@ -395,6 +417,7 @@ IPRouteTableMPath::ctrl_handler(const String &conf_in, Element *e, void *, Error
 
         s = nl + 1;
     }
+    table->write_end();
     return 0;
 
   rollback:
@@ -408,6 +431,7 @@ IPRouteTableMPath::ctrl_handler(const String &conf_in, Element *e, void *, Error
             table->add_route(rt, true, 0, errh);
         old_routes.pop_back();
     }
+    table->write_end();
     return r;
 }
 
@@ -415,7 +439,10 @@ String
 IPRouteTableMPath::table_handler(Element *e, void *)
 {
     IPRouteTableMPath *r = static_cast<IPRouteTableMPath*>(e);
-    return r->dump_routes();
+    r->write_begin();
+    String result = r->dump_routes();
+    r->write_end();
+    return result;
 }
 
 int
@@ -425,7 +452,10 @@ IPRouteTableMPath::lookup_handler(int, String& s, Element* e, const Handler*, Er
     IPAddress a;
     if (IPAddressArg().parse(s, a, table)) {
         IPAddress gw;
+        int read_token;
+        table->read_begin(read_token);
         int port = table->lookup_route(a, gw);
+        table->read_end(read_token);
         if (gw)
             s = String(port) + " " + gw.unparse();
         else

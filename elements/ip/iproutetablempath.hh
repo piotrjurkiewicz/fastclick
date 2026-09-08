@@ -3,6 +3,7 @@
 #define CLICK_IPROUTETABLEMPATH_HH
 #include <click/glue.hh>
 #include <click/batchelement.hh>
+#include <click/multithread.hh>
 #include "iproutetable.hh"
 CLICK_DECLS
 
@@ -216,8 +217,14 @@ class IPRouteTableMPath : public BatchElement { public:
     static int lookup_handler(int operation, String&, Element*, const Handler*, ErrorHandler*);
     static String table_handler(Element*, void*);
 
-  private:
+  protected:
 
+    virtual void read_begin(int&) const { }
+    virtual void read_end(int&) const { }
+    virtual void write_begin() { }
+    virtual void write_end() { }
+
+  private:
     int _mode;
     uint32_t _salt;
     enum { MODE_SINGLE, MODE_ADDR, MODE_PORT, MODE_PACKET };
